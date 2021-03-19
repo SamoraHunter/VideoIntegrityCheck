@@ -1,0 +1,199 @@
+import os
+import datetime
+import shutil
+from datetime import datetime
+import wmi
+import random as rand
+from random import random
+import time
+import math
+from random import seed
+from random import randint
+from datetime import datetime
+from IPython.display import clear_output
+from playsound import playsound
+from random import uniform, random, choice, sample
+import subprocess
+import os
+import re
+import subprocess
+import os.path
+from pathlib import Path
+
+
+#will use local machine to run ffmpeg, can be changed to run remotely. *probably paths need to be updated
+def defineLocalServer():
+    #
+    try:
+        cLOCAL = wmi.WMI()
+    except:
+        print("failed to define local server")
+        OfflineServerList.append("cLOCAL")
+    return cLOCAL
+    
+    
+   #Add the directories to process video files, will exclude documents/images/zips/rars
+   directoryList = ['C:\\Users\\', 'C:\\Users2\\', '...']
+
+
+def getListOfFiles(dirName):
+    # create a list of file and sub directories 
+    # names in the given directory 
+    listOfFile = os.listdir(dirName)
+    allFiles = list()
+    # Iterate over all the entries
+    for entry in listOfFile:
+        # Create full path
+        fullPath = os.path.join(dirName, entry)
+        # If entry is a directory then get the list of files in this directory 
+        if os.path.isdir(fullPath):
+            allFiles = allFiles + getListOfFiles(fullPath)
+        else:
+            allFiles.append(fullPath)
+            
+    #print("")
+    #print(len(allFiles))            
+    return allFiles
+    
+    
+  #unused
+def callCMD(cmdString):
+    singleUnit= cmdString
+    #startup = defineLocalServer().Win32_ProcessStartup.new (ShowWindow=0)
+    print(cmdString)
+    process_id, return_value = defineLocalServer().Win32_Process.Create (CommandLine= singleUnit)#, ProcessStartupInformation=startup)
+    #print(process_id)
+    #print(return_value)
+    return return_value
+    
+    
+#unused
+def callSubToLog(fileName):
+    print('ffmpeg -hwaccel cuda -v error -i '+fileName+' -f null - 2>test.log')
+    return subprocess.call( 'ffmpeg -hwaccel cuda -v error -i '+fileName+' -f null - 2>test.log',shell=True)
+    
+
+#Uses GPU to process video file checking for errors
+
+#alternate options:
+#Without using GPU memory only:
+#'ffmpeg -hwaccel cuda -v error -i '+'"'+fileName+'"'+' -f null - 2>test.log',shell=True'
+
+#Also GPU unsure if faster:
+#'ffmpeg -c:v h264_cuvid cuda -v error -i '+fileName+' -f null - 2>test2.log'
+
+#CPU ONLY:
+##'ffmpeg -v error -i '+fileName+' -f null - 2>test2.log'
+
+##Replace like this 
+#return subprocess.run(%%%REPLACEMENTSTRING%%%%)
+#
+def runSubToLog(fileName):
+    print('ffmpeg -hwaccel cuda -hwaccel_output_format cuda -v error -i '+fileName+' -f null - 2>test.log')
+    return subprocess.run( 'ffmpeg -hwaccel cuda -hwaccel_output_format cuda -v error -i '+'"'+fileName+'"'+' -f null - 2>test.log',shell=True)
+
+
+#Used as a failsafe to kill ffmpeg process through pyWMI
+def killFFMPEG():    
+    try:
+        for process in defineLocalServer().Win32_Process (name='ffmpeg.exe'):
+             process.Terminate()
+    except:
+        display("Failed to terminate on LocalServer")
+        
+
+#Stores previously checked and deemed working in checkedvid.txt, uses this to exclude from subsequent searches
+#Files with errors are written to broken and excluded through this log from subsequent searches
+
+def hasBeenPreviouslyChecked(fileName):
+    text_file = open("checkedvid.txt", "r" , encoding="utf-8")
+    lines = text_file.readlines()
+    text_file2 = open("broken.txt", "r" , encoding="utf-8")
+    lines2 = text_file2.readlines()
+    
+    previouslyChecked = lines + lines2
+    for line in previouslyChecked:
+        if line.rstrip() == fileName:
+            return True
+        else:
+            #print(fileName + " has not been checked")
+            pass
+    return False
+    
+    
+text_file = open("checkedvid.txt", "r" , encoding="utf-8")
+lines = text_file.readlines()
+
+text_file.close()
+previouslyChecked = lines
+
+#Set target directory or range here
+for j in range(6, 7):
+    allFiles = getListOfFiles(directoryList[j])
+    print(len(allFiles))
+    print(directoryList[j])
+    for i in range(len(previouslyChecked), len(allFiles)):
+        if hasBeenPreviouslyChecked(allFiles[i]) is False:
+            #Set some file exclusions, especially images otherwise ffmpeg will process them
+            if type(allFiles[i]) == int or '.jpeg' not in allFiles[i].lower() and '.png' not in allFiles[i].lower() and '.zip' not in allFiles[i].lower() and '.pdf' not in allFiles[i].lower() and '.rar' not in allFiles[i].lower() and '.dat' not in allFiles[i].lower() and '.7z' not in allFiles[i].lower() and '.html' not in allFiles[i].lower() and '.txt' not in allFiles[i].lower():
+                runSubToLog(allFiles[i])
+                log_file = open('test.log', "r", encoding="utf-8")
+                logLines = log_file.readlines()
+                log_file.close()
+                if('No such file or directory' in logLines):
+                    time.sleep(3)
+                    killFFMPEG()
+                    os.remove('test.log')
+                if(os.stat('test.log').st_size ==42):
+                    time.sleep(3)
+                    try:
+                        killFFMPEG()
+                        os.remove('test.log')
+                    except:
+                        print("File busy")
+                elif not os.stat('test.log').st_size == 0:
+                    print(allFiles[i])
+                    try:
+                        killFFMPEG()
+                        os.remove('test.log')
+                    except:
+                        time.sleep(10)
+                        try:
+                            killFFMPEG()
+                            os.remove('test.log')
+                        except:
+                            print("File busy")
+
+
+
+
+                    broken_file = open("broken.txt", "r" , encoding="utf-8")
+                    lines2 = broken_file.readlines()
+                    broken_file.close()
+                    broken_file = open("broken.txt", "w", encoding="utf-8")
+
+                    for line in lines2:
+                        broken_file.write(line)
+                    try:    
+                        broken_file.write( allFiles[i] + '\n')
+                    except:
+                        print("Failed to write filename " +  allFiles[i])
+                    broken_file.close()
+
+
+
+
+                elif os.stat('test.log').st_size == 0:
+                    text_file = open("checkedvid.txt", "r" , encoding="utf-8")
+                    lines = text_file.readlines()
+
+                    file = open("checkedvid.txt", "w",  encoding="utf-8")
+
+                    for line in lines:
+                        file.write(line)
+                    try:    
+                        file.write( allFiles[i] + '\n')
+                    except Exception as e:
+                        
+                        print(e)
+                    file.close()
